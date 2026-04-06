@@ -11,6 +11,7 @@ class InputHandler
 
   // call once at top of every frame, before game logic
   void update();
+  void clearPressed();
 
   bool isHeld(SDL_Scancode key) const;
   bool justPressed(SDL_Scancode key) const;
@@ -18,7 +19,8 @@ class InputHandler
 
  private:
   static constexpr int         KEY_COUNT = SDL_NUM_SCANCODES;
-  std::array<Uint8, KEY_COUNT> current_{};
-  std::array<Uint8, KEY_COUNT> previous_{};
-  bool                         quit_ = false;
+  std::array<Uint8, KEY_COUNT> current_{};  //
+  std::array<Uint8, KEY_COUNT> just_pressed_{};
+  // event-based, cleared each frame
+  bool quit_ = false;
 };

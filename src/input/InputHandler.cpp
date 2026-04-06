@@ -1,38 +1,34 @@
-#include "InputHandler.hpp"
+#include "input/InputHandler.hpp"
 
 #include <cstring>
-
-#include "SDL2/SDL_events.h"
-#include "SDL2/SDL_keyboard.h"
-#include "SDL2/SDL_scancode.h"
-#include "SDL2/SDL_stdinc.h"
 
 InputHandler::InputHandler()
 {
   current_.fill(0);
-  previous_.fill(0);
+  just_pressed_.fill(0);
 }
 
 void InputHandler::update()
 {
-  // drain sdl event queue for key events & for sdl getkbstate to stay updated
+  // Drain event queue — captures every keypress even if already released
   SDL_Event event;
   while (SDL_PollEvent(&event))
   {
     if (event.type == SDL_QUIT)
-    {
       quit_ = true;
-    }
-    if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+    if (event.type == SDL_KEYDOWN)
     {
-      quit_ = true;
+      if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+        quit_ = true;
+      // Record press regardless of how short it was
+
+      just_pressed_[event.key.keysym.scancode] = 1;
     }
   }
 
-  // snapshot to save current -> previous & read fresh state
-  previous_ = current_;
-  const Uint8* live = SDL_GetKeyboardState(nullptr);
-  std::memcpy(current_.data(), live, KEY_COUNT);
+  // Snapshot held state from SDL
+  const Uint8* state = SDL_GetKeyboardState(nullptr);
+  std::memcpy(current_.data(), state, KEY_COUNT);
 }
 
 bool InputHandler::isHeld(SDL_Scancode key) const
@@ -42,5 +38,10 @@ bool InputHandler::isHeld(SDL_Scancode key) const
 
 bool InputHandler::justPressed(SDL_Scancode key) const
 {
-  return current_[key] != 0 && previous_[key] == 0;
+  return just_pressed_[key] != 0;
+}
+
+void InputHandler::clearPressed()
+{
+  just_pressed_.fill(0);
 }
