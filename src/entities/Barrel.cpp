@@ -1,10 +1,9 @@
 #include "entities/Barrel.hpp"
 
+#include <cstdlib>
 #include <vector>
 
 #include "core/Constants.hpp"
-#include "entities/Entity.hpp"
-#include "geometry/Platform.hpp"
 
 Barrel::Barrel(float x, float y, float dir) : Entity(x, y, Constants::BARREL_W, Constants::BARREL_H)
 {
@@ -12,18 +11,66 @@ Barrel::Barrel(float x, float y, float dir) : Entity(x, y, Constants::BARREL_W, 
   prev_y = y;
 }
 
-void Barrel::update(float dt, const std::vector<Platform>& platforms)
+void Barrel::update(float dt, const std::vector<Platform>& platforms,
+                    const std::vector<Ladder>& ladders)
 {
+  // descending on ladder
+  if (on_ladder)
+  {
+    y += Constants::BARREL_DESCEND_SPD * dt;
+    if (y + height >= ladder_exit_y)
+    {
+      y = ladder_exit_y - height;
+      on_ladder = false;
+      on_ground = true;
+      prev_on_ground = true;
+      vx = saved_vx;
+      vy = 0.0f;
+      ladder_cooldown = 0.5f;
+    }
+    if (x + width < 0 || x > Constants::WINDOW_WIDTH || y > Constants::WINDOW_HEIGHT + 100)
+      active = false;
+    return;
+  }
+
+  if (ladder_cooldown > 0.0f)
+    ladder_cooldown -= dt;
+
   prev_y = y;
   prev_on_ground = on_ground;
   on_ground = false;
 
   vy += Constants::GRAVITY * dt;
-
   y += vy * dt;
   resolveY(platforms);
-
   x += vx * dt;
+
+  // ── Check for ladder descent when rolling on a platform
+  if (on_ground && ladder_cooldown <= 0.0f)
+  {
+    float cx = x + width * 0.5f;
+    for (const auto& l : ladders)
+    {
+      float barrel_bottom = y + height;
+      if (cx >= l.x && cx <= l.x + l.width && barrel_bottom > l.y - 4.0f &&
+          barrel_bottom < l.y + 4.0f)
+      {
+        if (std::rand() % 3 == 0)
+        {
+          on_ladder = true;
+          saved_vx = vx;
+          vx = 0.0f;
+          vy = 0.0f;
+          ladder_exit_y = l.y + l.height;
+        }
+        else
+        {
+          ladder_cooldown = 0.8f;  // skip this ladder, check again later
+        }
+        break;
+      }
+    }
+  }
 
   // remove when off screen
   if (x + width < 0 || x > Constants::WINDOW_WIDTH || y > Constants::WINDOW_HEIGHT + 100)

@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "entities/Entity.hpp"
+#include "geometry/Ladder.hpp"
 #include "geometry/Platform.hpp"
 
 class Barrel : public Entity
@@ -12,8 +13,14 @@ class Barrel : public Entity
   float roll_angle = 0.0f;  // visual rotation
   float prev_y = 0.0f;
 
+  // Ladder descent state
+  bool  on_ladder = false;
+  float ladder_exit_y = 0.0f;
+  float saved_vx = 0.0f;
+  float ladder_cooldown = 0.0f;
+
   Barrel(float x, float y, float dir);  // dir: +1 = R, -1 = L
-  void update(float dt, const std::vector<Platform>& platforms);
+  void update(float dt, const std::vector<Platform>& platforms, const std::vector<Ladder>& ladders);
   void render(SDL_Renderer* renderer) override;
 
  private:
