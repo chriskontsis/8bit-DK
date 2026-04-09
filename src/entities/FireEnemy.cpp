@@ -36,7 +36,7 @@ void FireEnemy::update(float dt)
   }
 }
 
-void FireEnemy::render(SDL_Renderer* renderer)
+void FireEnemy::render(SDL_Renderer* renderer) const
 {
   if (!active)
     return;

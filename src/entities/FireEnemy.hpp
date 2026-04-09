@@ -14,5 +14,5 @@ class FireEnemy : public Entity
 
   FireEnemy(float x, float y, float patrol_left, float patrol_right);
   void update(float dt);
-  void render(SDL_Renderer* renderer) override;
+  void render(SDL_Renderer* renderer) const override;
 };

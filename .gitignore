@@ -11,7 +11,7 @@
 # Compiled binary
 DonkeyKong
 
-# Sprite sheets (added manually, not committed — too large / ROM rips)
+# Sprite sheets (added manually, too large / ROM rips)
 assets/sprites/
 
 # High score file (local state, not shared)

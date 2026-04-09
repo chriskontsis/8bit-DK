@@ -32,7 +32,7 @@ bool DonkeyKong::readyToSpawn()
   return false;
 }
 
-void DonkeyKong::render(SDL_Renderer* renderer)
+void DonkeyKong::render(SDL_Renderer* renderer) const
 {
   if (!active)
     return;

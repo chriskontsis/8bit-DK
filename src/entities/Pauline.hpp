@@ -11,5 +11,5 @@ class Pauline : public Entity
   Pauline(float x, float y);
 
   void update(float dt);
-  void render(SDL_Renderer* renderer) override;
+  void render(SDL_Renderer* renderer) const override;
 };

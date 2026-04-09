@@ -13,7 +13,7 @@ class DonkeyKong : public Entity
   DonkeyKong(float x, float y);
 
   void update(float dt);
-  void render(SDL_Renderer* renderer) override;
+  void render(SDL_Renderer* renderer) const override;
   // ret true 1 per spawn interval - game uses to create barrel
   bool readyToSpawn();
   void startEscape() { escape_mode = true; }

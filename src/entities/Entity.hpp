@@ -17,7 +17,7 @@ class Entity
   Entity(float x, float y, float w, float h) : x(x), y(y), width(w), height(h) {}
   virtual ~Entity() = default;
 
-  virtual void render(SDL_Renderer* renderer) = 0;
+  virtual void render(SDL_Renderer* renderer) const = 0;
 
   // AABB overlap to detect collision
   bool overlaps(const Entity& other) const

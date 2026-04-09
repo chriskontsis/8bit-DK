@@ -15,7 +15,7 @@ void Pauline::update(float dt)
   }
 }
 
-void Pauline::render(SDL_Renderer* renderer)
+void Pauline::render(SDL_Renderer* renderer) const
 {
   if (!active)
     return;

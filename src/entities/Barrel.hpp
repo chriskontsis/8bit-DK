@@ -21,7 +21,7 @@ class Barrel : public Entity
 
   Barrel(float x, float y, float dir);  // dir: +1 = R, -1 = L
   void update(float dt, const std::vector<Platform>& platforms, const std::vector<Ladder>& ladders);
-  void render(SDL_Renderer* renderer) override;
+  void render(SDL_Renderer* renderer) const override;
 
  private:
   void resolveY(const std::vector<Platform>& platforms);

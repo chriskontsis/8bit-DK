@@ -172,7 +172,7 @@ void Mario::kill()
   vx = vy = 0.0f;
 }
 
-void Mario::render(SDL_Renderer* renderer)
+void Mario::render(SDL_Renderer* renderer) const
 {
   if (!active)
     return;

@@ -32,7 +32,7 @@ class Mario : public Entity
   Mario(float x, float y);
   void update(float dt, const InputHandler& input, const std::vector<Platform>& platforms,
               const std::vector<Ladder>& ladders);
-  void render(SDL_Renderer* renderer) override;
+  void render(SDL_Renderer* renderer) const override;
   void kill();
   bool isDead() const { return state == MarioState::DEAD; }
   bool deathDone() const { return state == MarioState::DEAD && death_timer <= 0.0f; }

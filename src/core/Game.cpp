@@ -1,15 +1,9 @@
 #include "core/Game.hpp"
 
-#include <SDL2/SDL_video.h>
-
-#include <algorithm>
-#include <memory>
-#include <ranges>
-
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_render.h"
-#include "SDL2/SDL_scancode.h"
 #include "SDL2/SDL_timer.h"
+#include "core/CollisionSystem.hpp"
 #include "core/Constants.hpp"
 #include "core/GameState.hpp"
 #include "geometry/Platform.hpp"
@@ -17,7 +11,6 @@
 #include "levels/Level25m.hpp"
 #include "levels/Level50m.hpp"
 
-// Init
 std::expected<void, std::string> Game::init()
 {
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -34,11 +27,10 @@ std::expected<void, std::string> Game::init()
   if (!renderer_)
     return std::unexpected{"SDL_CreateRenderer failed: " + std::string{SDL_GetError()}};
 
-  ui_ = std::make_unique<UI>(renderer_.get());
+  game_renderer_ = std::make_unique<GameRenderer>(renderer_.get());
   return {};
 }
 
-// Main loop
 void Game::run()
 {
   Uint64 prev = SDL_GetPerformanceCounter();
@@ -70,7 +62,6 @@ void Game::run()
   }
 }
 
-// Fixed Update - dispatch by state
 void Game::fixedUpdate(float dt)
 {
   switch (state_)
@@ -96,53 +87,45 @@ void Game::fixedUpdate(float dt)
   }
 }
 
-// ── State: MENU
 void Game::updateMenu()
 {
   if (input_.justPressed(SDL_SCANCODE_RETURN))
   {
-    current_level_ = 2;
+    current_level_ = 0;
     score_.reset();
-    loadLevel((current_level_));
+    loadLevel(current_level_);
     state_ = GameState::PLAYING;
   }
 }
 
-// ── State: PLAYING
 void Game::updatePlaying(float dt)
 {
-  if (!mario_ || !dk_ || !level_)
+  if (!entities_.mario || !entities_.dk || !level_)
     return;
 
-  // update entites
-  mario_->update(dt, input_, level_->platforms, level_->ladders);
-  dk_->update(dt);
-  pauline_->update(dt);
+  entities_.updateAll(dt, input_, *level_);
+  entities_.spawnBarrel(*level_);
 
-  for (auto& b : barrels_)
-    b.update(dt, level_->platforms, level_->ladders);
-  for (auto& f : level_->fire_enemies)
-    f.update(dt);
+  if (CollisionSystem::checkEnemyHit(*entities_.mario, entities_.barrels, level_->fire_enemies))
+  {
+    score_.loseLife();
+    entities_.mario->kill();
+  }
 
-  // remove inactive barrels
-  std::erase_if(barrels_, [](const Barrel& b) { return !b.active; });
-
-  spawnBarrelIfReady();
-  checkCollisions();
-
-  // conveyor belt - push mario
-  if (mario_->on_ground)
+  // Conveyor belt
+  if (entities_.mario->on_ground)
   {
     for (const auto& p : level_->platforms)
     {
       if (p.conveyor_speed == 0.0f)
         continue;
       SDL_FRect pr = p.rect();
-      SDL_FRect mr = mario_->rect();
-      if (mr.x + mr.w > pr.x && mr.x < pr.x + pr.w && mario_->y + mario_->height >= p.y &&
-          mario_->y + mario_->height <= p.y + p.height + 2)
+      SDL_FRect mr = entities_.mario->rect();
+      if (mr.x + mr.w > pr.x && mr.x < pr.x + pr.w &&
+          entities_.mario->y + entities_.mario->height >= p.y &&
+          entities_.mario->y + entities_.mario->height <= p.y + p.height + 2)
       {
-        mario_->x += p.conveyor_speed * Constants::FIXED_DT;
+        entities_.mario->x += p.conveyor_speed * Constants::FIXED_DT;
       }
     }
   }
@@ -152,11 +135,12 @@ void Game::updatePlaying(float dt)
     if (p.hole_open_delay > 0.0f)
       p.hole_open_delay -= dt;
 
-  // Rivet Collection (level 100m)
+  // Rivet collection
   for (auto& r : level_->rivets)
   {
-    if (!r.collected && mario_->x + mario_->width > r.x && mario_->x < r.x + r.width &&
-        mario_->y + mario_->height >= r.y && mario_->y < r.y + r.height)
+    if (!r.collected && entities_.mario->x + entities_.mario->width > r.x &&
+        entities_.mario->x < r.x + r.width && entities_.mario->y + entities_.mario->height >= r.y &&
+        entities_.mario->y < r.y + r.height)
     {
       r.collected = true;
       score_.addPoints(Constants::POINTS_RIVET);
@@ -167,12 +151,12 @@ void Game::updatePlaying(float dt)
           p.hole1 = Platform::Hole(r.x, r.width);
         else
           p.hole2 = Platform::Hole(r.x, r.width);
-        p.hole_open_delay = 1.2f;  // grace period before hole is passable
+        p.hole_open_delay = 1.2f;
       }
     }
   }
 
-  // Win cond
+  // Win condition
   if (level_->usesRivets())
   {
     if (level_->allRivetsGone())
@@ -184,37 +168,33 @@ void Game::updatePlaying(float dt)
   }
   else
   {
-    if (mario_->overlaps(*pauline_))
+    if (entities_.mario->overlaps(*entities_.pauline))
     {
       score_.addPoints(Constants::POINTS_LEVEL_CLEAR);
       escape_timer_ = 0.0f;
-      dk_->startEscape();
+      entities_.dk->startEscape();
       state_ = GameState::DK_ESCAPING;
     }
   }
 
-  // Death handle
-  if (mario_->deathDone())
+  // Death
+  if (entities_.mario->deathDone())
   {
     if (score_.isGameOver())
-    {
       state_ = GameState::GAME_OVER;
-    }
     else
-    {
-      resetEntities();
-    }
+      entities_.reset(*level_);
   }
 }
 
-// State: DK_ESCAPING
 void Game::updateEscaping(float dt)
 {
   constexpr float ESCAPE_SPEED = 80.0f;
 
-  dk_->y -= ESCAPE_SPEED * dt;
-  pauline_->x = dk_->x + dk_->width * 0.5f - pauline_->width * 0.5f;
-  pauline_->y = dk_->y - pauline_->height;
+  entities_.dk->y -= ESCAPE_SPEED * dt;
+  entities_.pauline->x =
+      entities_.dk->x + entities_.dk->width * 0.5f - entities_.pauline->width * 0.5f;
+  entities_.pauline->y = entities_.dk->y - entities_.pauline->height;
 
   escape_timer_ += dt;
   if (escape_timer_ >= 2.0f)
@@ -224,7 +204,6 @@ void Game::updateEscaping(float dt)
   }
 }
 
-// State: LEVEL_COMPLETE
 void Game::updateLevelComplete(float dt)
 {
   state_timer_ -= dt;
@@ -232,9 +211,7 @@ void Game::updateLevelComplete(float dt)
   {
     ++current_level_;
     if (current_level_ >= 3)
-    {
       state_ = GameState::WIN;
-    }
     else
     {
       loadLevel(current_level_);
@@ -243,7 +220,6 @@ void Game::updateLevelComplete(float dt)
   }
 }
 
-// ── State: GAME_OVER
 void Game::updateGameOver()
 {
   if (input_.justPressed(SDL_SCANCODE_RETURN))
@@ -255,72 +231,19 @@ void Game::updateGameOver()
   }
 }
 
-// ── State: WIN
 void Game::updateWin()
 {
   if (input_.justPressed(SDL_SCANCODE_RETURN))
     state_ = GameState::MENU;
 }
 
-// Render
-
 void Game::render()
 {
-  if (state_ == GameState::MENU)
-  {
-    ui_->renderMenu(renderer_.get());
-    SDL_RenderPresent(renderer_.get());
-    return;
-  }
-
-  // Clear with level background
-  if (level_)
-    level_->renderBackground(renderer_.get());
-
-  if (state_ == GameState::PLAYING || state_ == GameState::DK_ESCAPING)
-  {
-    // Static geometry
-    for (const auto& p : level_->platforms)
-      p.render(renderer_.get());
-    for (const auto& l : level_->ladders)
-      l.render(renderer_.get());
-    for (const auto& r : level_->rivets)
-      r.render(renderer_.get());
-
-    // Entities
-    dk_->render(renderer_.get());
-    pauline_->render(renderer_.get());
-    for (auto& b : barrels_)
-      b.render(renderer_.get());
-    for (auto& f : level_->fire_enemies)
-      f.render(renderer_.get());
-    mario_->render(renderer_.get());
-
-    ui_->renderHUD(score_, LEVEL_NUMS[current_level_]);
-
-    if (state_ == GameState::LEVEL_COMPLETE)
-    {
-      int next = (current_level_ + 1 < 3) ? LEVEL_NUMS[current_level_ + 1] : 0;
-      ui_->renderLevelComplete(renderer_.get(), next);
-    }
-  }
-  else if (state_ == GameState::GAME_OVER)
-  {
-    ui_->renderGameOver(renderer_.get());
-  }
-  else if (state_ == GameState::WIN)
-  {
-    ui_->renderWin(renderer_.get(), score_.score);
-  }
-
-  SDL_RenderPresent(renderer_.get());
+  game_renderer_->render(state_, level_.get(), entities_, score_, current_level_, LEVEL_NUMS);
 }
 
-// Helpers
 void Game::loadLevel(int index)
 {
-  barrels_.clear();
-
   switch (index)
   {
     case 0:
@@ -335,43 +258,5 @@ void Game::loadLevel(int index)
     default:
       return;
   }
-
-  resetEntities();
-}
-
-void Game::resetEntities()
-{
-  barrels_.clear();
-  mario_ = std::make_unique<Mario>(level_->mario_start_x, level_->mario_start_y);
-  dk_ = std::make_unique<DonkeyKong>(level_->dk_x, level_->dk_y);
-  pauline_ = std::make_unique<Pauline>(level_->pauline_x, level_->pauline_y);
-}
-
-void Game::spawnBarrelIfReady()
-{
-  if (!dk_ || level_->usesRivets())
-    return;
-  if (dk_->readyToSpawn())
-  {
-    float  spawn_y = level_->platforms.back().y - Constants::BARREL_H;
-    Barrel b(dk_->spawnX(), spawn_y, 1.0f);
-    b.on_ground = true;
-    b.prev_on_ground = true;
-    barrels_.push_back(std::move(b));
-  }
-}
-
-void Game::checkCollisions()
-{
-  if (!mario_ || mario_->isDead())
-    return;
-
-  auto hitsMario = [&](const auto& e) { return e.active && mario_->overlaps(e); };
-
-  if (std::ranges::any_of(barrels_, hitsMario) ||
-      std::ranges::any_of(level_->fire_enemies, hitsMario))
-  {
-    score_.loseLife();
-    mario_->kill();
-  }
+  entities_.reset(*level_);
 }

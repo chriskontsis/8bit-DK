@@ -106,7 +106,7 @@ void Barrel::resolveY(const std::vector<Platform>& platforms)
   }
 }
 
-void Barrel::render(SDL_Renderer* renderer)
+void Barrel::render(SDL_Renderer* renderer) const
 {
   if (!active)
     return;
