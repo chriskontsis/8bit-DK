@@ -106,7 +106,8 @@ void Game::updatePlaying(float dt)
   entities_.updateAll(dt, input_, *level_);
   entities_.spawnBarrel(*level_);
 
-  if (CollisionSystem::checkEnemyHit(*entities_.mario, entities_.barrels, level_->fire_enemies))
+  if (!entities_.mario->isDead() &&
+      CollisionSystem::checkEnemyHit(*entities_.mario, entities_.barrels, level_->fire_enemies))
   {
     score_.loseLife();
     entities_.mario->kill();
